@@ -1,4 +1,5 @@
 const bcrypt = require('bcrypt');
+import jwt from 'jsonwebtoken';
 const { generateAccessToken, generateRefreshToken } = require('../utils/generateJwtToken.js');
 const db = require('../models');
 
