@@ -1,5 +1,4 @@
 const bcrypt = require('bcrypt');
-const { generateAccessToken, generateRefreshToken } = require('../utils/generateJwtToken.js');
 const db = require('../models');
 
 const User = db.users;

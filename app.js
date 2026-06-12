@@ -29,8 +29,31 @@ app.use((err, req, res, next) => {
 });
 const db = require('./models');
 
+const MAX_DB_CONNECT_RETRIES = parseInt(process.env.DB_RETRY_ATTEMPTS, 10) || 10;
+const DB_RETRY_DELAY_MS = parseInt(process.env.DB_RETRY_DELAY_MS, 10) || 2000;
+
+async function waitForDatabase() {
+    let attempt = 0;
+
+    while (attempt < MAX_DB_CONNECT_RETRIES) {
+        try {
+            await db.sequelize.authenticate();
+            console.log('Database connection established');
+            return;
+        } catch (error) {
+            attempt += 1;
+            console.error(`Database connection attempt ${attempt}/${MAX_DB_CONNECT_RETRIES} failed:`, error.message);
+            if (attempt >= MAX_DB_CONNECT_RETRIES) {
+                throw error;
+            }
+            await new Promise((resolve) => setTimeout(resolve, DB_RETRY_DELAY_MS));
+        }
+    }
+}
+
 (async () => {
     try {
+        await waitForDatabase();
         await db.sequelize.sync();
         app.listen(PORT, () => {
             console.log(`Server listening on port ${PORT}`);
