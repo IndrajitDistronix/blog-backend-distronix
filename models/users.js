@@ -32,6 +32,14 @@ module.exports = (sequelize, DataTypes) => {
         { expiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN || '7d' }
       );
     };
+
+    verifyRefreshToken(token) {
+      try {
+        return jwt.verify(token, process.env.REFRESH_TOKEN_SECRET);
+      } catch (err) {
+        return null;
+      }
+    };
   }
   users.init({
     id: {
@@ -59,6 +67,18 @@ module.exports = (sequelize, DataTypes) => {
   }, {
     sequelize,
     modelName: 'users',
+    hooks: {
+      beforeCreate: async (user) => {
+        if (user.password) {
+          user.password = await bcrypt.hash(user.password, 10);
+        }
+      },
+      beforeUpdate: async (user) => {
+        if (user.changed('password')) {
+          user.password = await bcrypt.hash(user.password, 10);
+        }
+      }
+    }
   });
   return users;
 };

@@ -1,5 +1,4 @@
 const bcrypt = require('bcrypt');
-import jwt from 'jsonwebtoken';
 const { generateAccessToken, generateRefreshToken } = require('../utils/generateJwtToken.js');
 const db = require('../models');
 
@@ -21,9 +20,8 @@ const register = async (req, res) => {
             return res.status(409).json({ message: 'Email already registered.' });
         }
 
-        const hashedPassword = await bcrypt.hash(password, 10);
-        const user = await User.create({ name, email, password: hashedPassword });
-        const refreshToken = generateRefreshToken(user);
+        const user = await User.create({ name, email, password });
+        const refreshToken = user.generateRefreshToken();
 
         user.refresh_token = refreshToken;
         await user.save();
@@ -32,7 +30,7 @@ const register = async (req, res) => {
         return res.status(201).json({
             message: 'User registered successfully.',
             user: responseUser,
-            accessToken: generateAccessToken(user),
+            accessToken: user.generateAccessToken(),
         });
     } catch (error) {
         console.error(error);
@@ -52,13 +50,13 @@ const login = async (req, res) => {
             return res.status(401).json({ message: 'Invalid email or password.' });
         }
 
-        const passwordMatch = await bcrypt.compare(password, user.password);
+        const passwordMatch = await user.validatePassword(password);
         if (!passwordMatch) {
             return res.status(401).json({ message: 'Invalid email or password.' });
         }
 
-        const accessToken = generateAccessToken(user);
-        const refreshToken = generateRefreshToken(user);
+        const accessToken = user.generateAccessToken();
+        const refreshToken = user.generateRefreshToken();
 
         user.refresh_token = refreshToken;
         await user.save();
@@ -82,19 +80,18 @@ const refreshToken = async (req, res) => {
             return res.status(400).json({ message: 'Refresh token is required.' });
         }
 
-        jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET, async (err, payload) => {
-            if (err) {
-                return res.status(403).json({ message: 'Invalid refresh token.' });
-            }
+        const user = await User.findOne({ where: { refresh_token: refreshToken } });
+        if (!user) {
+            return res.status(403).json({ message: 'Refresh token not recognized.' });
+        }
 
-            const user = await User.findOne({ where: { id: payload.userId, refresh_token: refreshToken } });
-            if (!user) {
-                return res.status(403).json({ message: 'Refresh token not recognized.' });
-            }
+        const payload = user.verifyRefreshToken(refreshToken);
+        if (!payload || payload.userId !== user.id) {
+            return res.status(403).json({ message: 'Invalid refresh token.' });
+        }
 
-            const accessToken = generateAccessToken(user);
-            return res.status(200).json({ accessToken });
-        });
+        const accessToken = user.generateAccessToken();
+        return res.status(200).json({ accessToken });
     } catch (error) {
         console.error(error);
         return res.status(500).json({ message: 'Unable to refresh token.' });
