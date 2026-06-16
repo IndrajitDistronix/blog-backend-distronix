@@ -2,6 +2,8 @@ const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const authRoutes = require('./routes/authRoutes');
+const { globalRateLimiter, authRateLimiter } = require('./middlewares/rateLimitMiddleware');
+const { connectRedis } = require('./utils/redisClient');
 
 dotenv.config({
     path: './.env'
@@ -16,8 +18,9 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(globalRateLimiter);
 
-app.use('/api/auth', authRoutes);
+app.use('/api/auth', authRateLimiter, authRoutes);
 
 app.get('/', (req, res) => {
     res.json({ message: 'API is running.' });
@@ -54,12 +57,13 @@ async function waitForDatabase() {
 (async () => {
     try {
         await waitForDatabase();
+        await connectRedis();
         await db.sequelize.sync();
         app.listen(PORT, () => {
             console.log(`Server listening on port ${PORT}`);
         });
     } catch (err) {
-        console.error('Unable to sync database:', err);
+        console.error('Startup error:', err);
         process.exit(1);
     }
 })();
